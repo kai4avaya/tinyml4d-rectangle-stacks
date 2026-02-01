@@ -1,0 +1,1878 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Interactive Shapes</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M50 5 L95 30 L95 75 L50 95 L5 75 L5 30 Z' fill='%234338ca' stroke='%230f172a' stroke-width='2'/%3E%3Cpath d='M5 30 L50 55 L95 30' fill='none' stroke='%230f172a' stroke-width='2'/%3E%3Cpath d='M50 55 L50 95' fill='none' stroke='%230f172a' stroke-width='2'/%3E%3C/svg%3E">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/ScrollTrigger.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/ScrollToPlugin.min.js"></script>
+    <!-- Chart.js for graphs -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- D3.js and TopoJSON for the vector map -->
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://unpkg.com/topojson-client@3"></script>
+
+    <style>
+        :root {
+            --bg-base: #f8fafc;
+            --text-main: #1e293b;
+            --accent-muted: #64748b;
+            --nav-height: 100px;
+        }
+
+        body {
+            margin: 0;
+            background-color: var(--bg-base);
+            /* Helvetica Light (300) for a thinner profile */
+            font-family: 'HelveticaNeue-Light', 'Helvetica Neue Light', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            font-weight: 300;
+            color: var(--text-main);
+            overflow-x: hidden;
+            transition: background-color 1.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        /* Minimal Navigation Bar */
+        #top-nav {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: var(--nav-height);
+            background: transparent;
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 60px;
+            box-sizing: border-box;
+            pointer-events: none;
+            /* Ensure background transition matches body */
+            transition: background-color 1.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        /* The specific black border requested */
+        #top-nav::after {
+            content: '';
+            position: absolute;
+            bottom: 20px; /* adjusted for ~16px padding below text */
+            left: 60px;
+            right: 60px;
+            height: 2px; /* 2px thick as requested */
+            background-color: #000;
+            transform: scaleX(0);
+            transform-origin: center;
+            transition: transform 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+            pointer-events: none;
+        }
+
+        /* Show the border and background when nav is in 'visible' state */
+        #top-nav.visible {
+            background-color: var(--bg-base); /* Fixed to base color so it doesn't change with sections */
+            pointer-events: auto; /* Blocks clicks on underlying content when opaque */
+        }
+
+        #top-nav.visible::after {
+            transform: scaleX(1);
+        }
+
+        .nav-brand {
+            font-weight: 400; /* Matching the thinner aesthetic */
+            letter-spacing: -0.01em;
+            font-size: 26px;
+            color: #0f172a;
+            pointer-events: auto;
+        }
+
+        /* Desktop Nav Styles */
+        .nav-links {
+            display: flex;
+            gap: 30px; 
+            position: absolute;
+            left: 50%;
+            /* Pushed significantly higher to ensure no peaking at all */
+            transform: translateX(-50%) translateY(-250px); 
+            transition: transform 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+            pointer-events: auto;
+        }
+
+        #top-nav.visible .nav-links {
+            transform: translateX(-50%) translateY(0);
+        }
+
+        .nav-item {
+            font-size: 26px; /* Same size as TinyML 4D */
+            font-weight: 300;
+            cursor: pointer;
+            transition: opacity 0.3s ease, transform 0.3s ease;
+            opacity: 0.4;
+            text-transform: none;
+        }
+
+        .nav-item:hover, .nav-item.active {
+            opacity: 1;
+        }
+
+        /* Mobile Menu Icon */
+        .mobile-menu-icon {
+            display: none;
+            cursor: pointer;
+            pointer-events: auto;
+            color: #0f172a;
+            transition: transform 0.3s ease; /* Smooth rotation */
+        }
+
+        /* Mobile Responsive Styles */
+        /* Increased breakpoint to 1150px to prevent overlap with logo */
+        @media (max-width: 1150px) {
+            #top-nav {
+                padding: 0 30px; /* Reduced padding on mobile */
+            }
+
+            #top-nav::after {
+                left: 30px;
+                right: 30px;
+            }
+
+            .mobile-menu-icon {
+                display: block;
+                position: absolute;
+                right: 80px; /* Position to left of search */
+            }
+
+            .nav-links {
+                position: absolute;
+                top: 100%;
+                left: 0;
+                width: 100%;
+                flex-direction: column;
+                background-color: var(--bg-base);
+                padding: 40px 0;
+                gap: 25px;
+                align-items: center;
+                border-bottom: 1px solid rgba(0,0,0,0.1);
+                
+                /* Reset Desktop Transform logic */
+                transform: translateY(-20px);
+                opacity: 0;
+                pointer-events: none;
+                transition: opacity 0.3s ease, transform 0.3s ease;
+                box-shadow: 0 10px 30px rgba(0,0,0,0.05);
+            }
+
+            /* Override the desktop "visible" state so it doesn't auto-show on scroll */
+            #top-nav.visible .nav-links {
+                transform: translateY(-20px);
+                opacity: 0;
+                pointer-events: none;
+            }
+
+            /* State when menu is toggled open */
+            .nav-links.mobile-open {
+                transform: translateY(0) !important;
+                opacity: 1 !important;
+                pointer-events: auto !important;
+            }
+        }
+
+        .search-container {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            pointer-events: auto;
+        }
+
+        #search-input {
+            width: 0;
+            opacity: 0;
+            border: none;
+            border-bottom: 1px solid #334155;
+            background: transparent;
+            padding: 4px 0;
+            outline: none;
+            transition: width 0.4s ease, opacity 0.3s ease;
+            font-size: 18px;
+            font-family: inherit;
+            font-weight: 300;
+            color: #0f172a;
+        }
+
+        #search-input.expanded {
+            width: 200px;
+            opacity: 1;
+        }
+
+        .search-icon {
+            cursor: pointer;
+            width: 32px; /* Increased from 24px */
+            height: 32px; /* Increased from 24px */
+            color: #334155;
+        }
+
+        /* Hero Overlay Elements */
+        #hero-controls {
+            position: fixed;
+            bottom: 40px;
+            left: 60px;
+            right: 60px;
+            z-index: 100;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            pointer-events: none;
+            transition: opacity 0.5s ease;
+        }
+
+        .progress-circle-container {
+            width: 44px;
+            height: 44px;
+            position: relative;
+        }
+
+        .progress-circle-container svg {
+            transform: rotate(-90deg);
+        }
+
+        .progress-bg {
+            fill: none;
+            stroke: rgba(0,0,0,0.05);
+            stroke-width: 2;
+        }
+
+        .progress-bar {
+            fill: none;
+            stroke: #334155;
+            stroke-width: 2;
+            stroke-dasharray: 100;
+            stroke-dashoffset: 100;
+            transition: stroke-dashoffset 0.1s linear;
+        }
+
+        .scroll-down-btn {
+            pointer-events: auto;
+            cursor: pointer;
+            background: none;
+            border: none;
+            color: #334155;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            transition: transform 0.3s ease;
+        }
+
+        .scroll-down-btn:hover {
+            transform: translateY(8px);
+        }
+
+        #canvas-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 1;
+        }
+
+        #scroll-wrapper {
+            position: relative;
+            z-index: 2;
+        }
+
+        .scroll-section {
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            padding-left: 10%;
+            pointer-events: none;
+        }
+
+        /* Specialized Centering for Participate Section */
+        #sec-participate {
+            flex-direction: column;
+            justify-content: center; /* Vertically center the content */
+            padding-top: 0;
+        }
+
+        .content-card {
+            padding: 0; 
+            max-width: 600px; /* Slightly wider for stats */
+            pointer-events: auto;
+            opacity: 0;
+            transform: translateY(30px);
+            transition: all 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+            border-left: none; /* Removed all borders */
+        }
+
+        .scroll-section.active .content-card {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        /* CTA CSS */
+        .cta-container {
+            display: flex;
+            gap: 24px;
+            margin-top: 40px;
+            pointer-events: auto;
+        }
+
+        .cta-btn {
+            position: relative;
+            display: inline-block;
+            padding: 14px 28px;
+            color: #4338ca;
+            text-decoration: none;
+            font-size: 16px;
+            font-weight: 400;
+            letter-spacing: 0.02em;
+            transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+            border: 1px solid #4338ca; 
+            background: rgba(255, 255, 255, 0.01);
+            z-index: 10;
+            white-space: nowrap;
+        }
+
+        .cta-btn::after {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            border: 1px solid #4338ca;
+            transform: translate(5px, 5px);
+            opacity: 0.3;
+            z-index: -1;
+            transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.4s ease;
+        }
+
+        .cta-btn:hover {
+            transform: translate(-2px, -2px);
+            background: rgba(67, 56, 202, 0.05);
+        }
+
+        .cta-btn:hover::after {
+            transform: translate(10px, 10px);
+            opacity: 0.7;
+        }
+
+        .about-images-row {
+            display: flex;
+            gap: 24px;
+            margin-top: 50px;
+            pointer-events: auto;
+        }
+
+        .about-image {
+            display: block;
+            height: 280px;
+            width: 210px; 
+            object-fit: cover;
+            border-radius: 2px;
+            box-shadow: 20px 30px 50px -15px rgba(67, 56, 202, 0.15);
+            opacity: 0;
+            transform: translateY(40px) scale(0.98);
+            transition: all 1.2s cubic-bezier(0.16, 1, 0.3, 1) 0.1s;
+            pointer-events: auto;
+            mix-blend-mode: multiply;
+        }
+
+        .about-image:nth-child(2) {
+            transition-delay: 0.2s;
+        }
+
+        .scroll-section.active .about-image {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+        }
+
+        /* STATS SECTION STYLES */
+        .stats-row {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 40px;
+            margin-bottom: 40px;
+            gap: 20px;
+        }
+
+        .stat-item {
+            text-align: center;
+            flex: 1;
+        }
+
+        .stat-icon {
+            width: 48px;
+            height: 48px;
+            margin-bottom: 12px;
+            stroke: #92400e;
+            stroke-width: 1.5;
+            fill: none;
+        }
+
+        .stat-number {
+            font-size: 32px;
+            font-weight: 300;
+            color: #92400e;
+            display: block;
+            margin-bottom: 4px;
+        }
+
+        .stat-label {
+            font-size: 14px;
+            color: #78350f;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .charts-container {
+            display: flex;
+            gap: 20px;
+            margin-top: 20px;
+            height: 200px;
+        }
+
+        .chart-wrapper {
+            flex: 1;
+            position: relative;
+            background: rgba(255,255,255,0.4);
+            border-radius: 8px;
+            padding: 10px;
+        }
+
+        /* GLOBAL COMMUNITY MAP STYLES (D3) */
+        .global-container {
+            display: flex;
+            flex-direction: column;
+            gap: 30px;
+            margin-top: 30px;
+        }
+
+        .map-wrapper {
+            position: relative;
+            width: 100%;
+            height: 280px;
+        }
+
+        .country-path {
+            fill: transparent;
+            stroke: #cbd5e1;
+            stroke-width: 1px;
+            transition: fill 0.2s ease, stroke 0.2s ease;
+        }
+
+        .country-path.active {
+            fill: #059669; 
+            stroke: #047857;
+            stroke-width: 1.5px;
+        }
+
+        /* Revert to Vertical List */
+        .country-list {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 8px;
+            max-height: 200px; /* Constrained height for scrolling effect */
+            overflow-y: hidden; /* Hidden because we scroll it with JS */
+            padding-right: 10px;
+            position: relative;
+        }
+
+        .country-item {
+            padding: 10px 15px;
+            border-left: 2px solid transparent;
+            border-bottom: none;
+            font-size: 18px; 
+            font-weight: 300;
+            transition: all 0.3s ease;
+            opacity: 0.4;
+            color: #334155;
+            cursor: default;
+        }
+
+        .country-item.active {
+            border-left: 2px solid #065f46;
+            border-bottom: none;
+            background: rgba(6, 95, 70, 0.05);
+            opacity: 1;
+            padding-left: 20px;
+            color: #065f46;
+            font-weight: 500;
+        }
+
+        /* PILLARS GRID STYLES (Replaced Carousel) */
+        .pillars-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 30px;
+            width: 100%;
+            margin-top: 40px;
+            pointer-events: auto;
+        }
+
+        .pillar-card {
+            background: white;
+            border-radius: 4px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.05);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            transition: transform 0.3s ease;
+        }
+
+        .pillar-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .pillar-img {
+            width: 100%;
+            height: 200px; 
+            object-fit: cover;
+        }
+
+        .pillar-content {
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+        }
+
+        .pillar-title {
+            font-size: 22px;
+            color: #1e3a8a;
+            margin-bottom: 12px;
+            font-weight: 400;
+        }
+
+        .pillar-text {
+            font-size: 15px;
+            color: #64748b;
+            line-height: 1.6;
+            margin-bottom: 24px;
+            flex-grow: 1;
+        }
+
+        /* Footer Styles */
+        .site-footer {
+            background-color: #0f172a;
+            color: #f8fafc;
+            padding: 80px 10%;
+            position: relative;
+            z-index: 50;
+            pointer-events: auto;
+        }
+
+        /* Top section with Form and Newsletter */
+        .footer-top {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 60px;
+            margin-bottom: 60px;
+            justify-content: space-between;
+        }
+
+        .footer-form-col {
+            flex: 1 1 300px;
+        }
+
+        .footer-form-col h3 {
+            font-size: 20px;
+            font-weight: 400;
+            margin-bottom: 20px;
+            color: #e2e8f0;
+        }
+
+        .footer-form-col p {
+            font-size: 16px;
+            color: #94a3b8;
+            margin-bottom: 20px;
+        }
+
+        .newsletter-form {
+            display: flex;
+            gap: 10px;
+        }
+
+        .newsletter-input {
+            padding: 12px;
+            border: 1px solid #334155;
+            background: #1e293b;
+            color: white;
+            flex: 1;
+            font-family: inherit;
+            border-radius: 4px;
+        }
+
+        .newsletter-btn {
+            padding: 12px 24px;
+            background: #4338ca;
+            color: white;
+            border: none;
+            cursor: pointer;
+            transition: background 0.3s;
+            border-radius: 4px;
+            font-weight: 500;
+        }
+
+        .newsletter-btn:hover {
+            background: #3730a3;
+        }
+
+        .contact-input {
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 12px;
+            background: #1e293b;
+            border: 1px solid #334155;
+            color: white;
+            font-family: inherit;
+            box-sizing: border-box;
+            border-radius: 4px;
+        }
+
+        /* Bottom section with Detailed Links */
+        .footer-links-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 40px;
+            border-top: 1px solid #334155;
+            padding-top: 50px;
+        }
+
+        .link-column h4 {
+            color: #f8fafc; /* Highlight color for headers like "Learn", "Community" */
+            font-size: 16px;
+            margin-bottom: 20px;
+            font-weight: 600;
+            letter-spacing: 0.02em;
+        }
+
+        .link-column a {
+            display: block;
+            color: #94a3b8;
+            text-decoration: none;
+            margin-bottom: 12px;
+            font-size: 14px;
+            transition: color 0.3s;
+        }
+
+        .link-column a:hover {
+            color: #60a5fa;
+        }
+
+        .link-column a.future-link {
+            color: #475569;
+            cursor: default;
+        }
+        
+        .link-column a.future-link:hover {
+            color: #475569;
+        }
+
+        /* Updated Partnership Pill Styles */
+        .partners-grid {
+            display: flex;
+            gap: 20px;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+
+        .partner-pill {
+            padding: 12px 24px;
+            background: transparent; /* No fill */
+            border: 1px solid #94a3b8; /* Border only */
+            color: #1e293b;
+            border-radius: 4px;
+            font-weight: 500;
+            text-decoration: none; /* Link reset */
+            transition: all 0.3s ease;
+            display: inline-block;
+        }
+
+        .partner-pill:hover {
+            border-color: #4338ca;
+            color: #4338ca;
+            background: rgba(67, 56, 202, 0.05);
+        }
+
+        .label {
+            position: fixed;
+            z-index: 50;
+            font-size: 13px;
+            font-weight: 300;
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+            pointer-events: none;
+            white-space: nowrap;
+            transition: opacity 0.5s ease, transform 0.5s ease;
+            text-align: center;
+        }
+
+        h2 { font-size: 64px; margin: 0 0 24px 0; font-weight: 300; letter-spacing: -0.04em; }
+        p { color: #475569; line-height: 1.5; margin: 0; font-size: 22px; font-weight: 300; }
+    </style>
+</head>
+<body>
+
+    <nav id="top-nav">
+        <div class="nav-brand">TinyML 4D</div>
+        
+        <!-- Mobile Menu Icon (Hamburger) -->
+        <div class="mobile-menu-icon" onclick="toggleMobileMenu()">
+            <svg width="28" height="28" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+            </svg>
+        </div>
+
+        <div class="nav-links">
+            <div class="nav-item" style="color: #4338ca;" onclick="handleNavClick('sec-about')">About</div>
+            <div class="nav-item" style="color: #92400e;" onclick="handleNavClick('sec-community')">Stats</div>
+            <div class="nav-item" style="color: #065f46;" onclick="handleNavClick('sec-world')">Community</div>
+            <div class="nav-item" style="color: #1e3a8a;" onclick="handleNavClick('sec-participate')">Participate</div>
+            <div class="nav-item" style="color: #1e293b;" onclick="handleNavClick('sec-partnerships')">Partnerships</div>
+        </div>
+        <div class="search-container">
+            <input type="text" id="search-input" placeholder="Search...">
+            <svg class="search-icon" onclick="toggleSearch()" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+            </svg>
+        </div>
+    </nav>
+
+    <div id="hero-controls">
+        <div class="progress-circle-container">
+            <svg width="44" height="44" viewBox="0 0 44 44">
+                <circle class="progress-bg" cx="22" cy="22" r="18"></circle>
+                <circle class="progress-bar" id="cycle-progress" cx="22" cy="22" r="18"></circle>
+            </svg>
+        </div>
+        <button class="scroll-down-btn" onclick="scrollToSection('sec-about')">
+            <svg width="32" height="32" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+            </svg>
+        </button>
+    </div>
+
+    <div id="canvas-container"></div>
+
+    <div id="scroll-wrapper">
+        <section class="scroll-section" id="hero"></section>
+        
+        <section class="scroll-section" id="sec-about" data-bg="#eff6ff">
+            <div class="content-card">
+                <h2 style="color: #4338ca">One million AI engineers</h2>
+                <p>Empowering a global community to build the future of AI engineering together with a mission to educate One million AI engineers by 2030</p>
+                
+                <div class="about-images-row">
+                    <img src="https://i.pinimg.com/736x/83/c6/4e/83c64e3889dc867e789bfc91253c6d1b.jpg" alt="TinyML Textbook" class="about-image">
+                    <img src="https://i.pinimg.com/736x/29/3f/58/293f584bf85e9bc8545d5312cfb4f6bf.jpg" alt="Machine Learning Book" class="about-image">
+                </div>
+
+                <div class="cta-container">
+                    <a href="#" class="cta-btn">Join the Movement</a>
+                    <a href="#" class="cta-btn">Start Learning</a>
+                </div>
+            </div>
+        </section>
+
+        <section class="scroll-section" id="sec-community" data-bg="#fffbeb">
+            <div class="content-card">
+                <h2 style="color: #92400e">Impact & Social Proof</h2>
+                <p>The Stats: Measuring our global footprint and open source contribution.</p>
+                
+                <div class="stats-row">
+                    <div class="stat-item">
+                        <svg class="stat-icon" viewBox="0 0 24 24">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+                        </svg>
+                        <span class="stat-number" data-target="22">0</span>
+                        <span class="stat-label">Countries</span>
+                    </div>
+                    <div class="stat-item">
+                        <svg class="stat-icon" viewBox="0 0 24 24">
+                            <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+                            <line x1="8" y1="21" x2="16" y2="21"></line>
+                            <line x1="12" y1="17" x2="12" y2="21"></line>
+                        </svg>
+                        <span class="stat-number" data-target="17">0</span>
+                        <span class="stat-label">Sessions</span>
+                    </div>
+                    <div class="stat-item">
+                        <svg class="stat-icon" viewBox="0 0 24 24">
+                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                            <circle cx="9" cy="7" r="4"></circle>
+                            <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                        </svg>
+                        <span class="stat-number" data-target="43">0</span>
+                        <span class="stat-label">Presenters</span>
+                    </div>
+                    <div class="stat-item">
+                        <a href="#" style="color: inherit; text-decoration: none;">
+                            <svg class="stat-icon" viewBox="0 0 24 24" style="cursor: pointer;">
+                                <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"></path>
+                            </svg>
+                            <div style="display:flex; justify-content:center; align-items:baseline; gap:1px;">
+                                <span class="stat-number" data-target="18000">0</span>
+                                <span style="font-size: 32px; font-weight: 300; color: #92400e;">+</span>
+                            </div>
+                            <span class="stat-label">Stars</span>
+                        </a>
+                    </div>
+                </div>
+
+                <div class="charts-container">
+                    <div class="chart-wrapper">
+                        <canvas id="jobChart"></canvas>
+                    </div>
+                    <div class="chart-wrapper">
+                        <canvas id="marketChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="scroll-section" id="sec-world" data-bg="#ecfdf5">
+            <div class="content-card">
+                <h2 style="color: #065f46">Global Community</h2>
+                <p>Scroll to explore our international workshops and partnerships.</p>
+                
+                <div class="global-container">
+                    <!-- D3 Map Container -->
+                    <div class="map-wrapper" id="world-map"></div>
+                    
+                    <div class="country-list" id="country-list">
+                        <!-- List items will be inserted by JS -->
+                    </div>
+                </div>
+
+                <!-- Added CTA Button -->
+                <a href="#" class="cta-btn" style="margin-top: 25px; display: inline-block;">International Workshops</a>
+            </div>
+        </section>
+
+        <!-- Renamed ID and Content -->
+        <section class="scroll-section" id="sec-participate" data-bg="#f0f9ff">
+            <div class="content-card" style="max-width: 1000px; padding-right: 5%;"> <!-- Wider container for grid -->
+                <div style="max-width: 600px;"> <!-- Header container -->
+                    <h2 style="color: #1e3a8a">Participate</h2>
+                    <p>The Three Pillars: Learn, Connect, and Support.</p>
+                </div>
+                
+                <div class="pillars-grid">
+                    <!-- Learn Card -->
+                    <div class="pillar-card">
+                        <img src="https://images.unsplash.com/photo-1581092918056-0c4c3acd3789?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80" alt="Students in Lab" class="pillar-img">
+                        <div class="pillar-content">
+                            <h3 class="pillar-title">Learn</h3>
+                            <p class="pillar-text">Access the textbook, hardware kits (Arduino, Seeed, Raspberry Pi), and TinyTorch labs.</p>
+                            <a href="#" class="cta-btn">Start Learning</a>
+                        </div>
+                    </div>
+
+                    <!-- Participate Card -->
+                    <div class="pillar-card">
+                        <img src="https://images.unsplash.com/photo-1524178232363-1fb2b075b655?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80" alt="Auditorium" class="pillar-img">
+                        <div class="pillar-content">
+                            <h3 class="pillar-title">Participate</h3>
+                            <p class="pillar-text">Join global Applied AI Engineering Workshops or present your work at our monthly Show & Tell.</p>
+                            <a href="#" class="cta-btn">Join Session</a>
+                        </div>
+                    </div>
+
+                    <!-- Support Card -->
+                    <div class="pillar-card">
+                        <img src="https://images.unsplash.com/photo-1531482615713-2afd69097998?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80" alt="Collaboration" class="pillar-img">
+                        <div class="pillar-content">
+                            <h3 class="pillar-title">Support</h3>
+                            <p class="pillar-text">Help us expand access to practical AI education in under-resourced regions.</p>
+                            <a href="#" class="cta-btn">Get Involved</a>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+        <section class="scroll-section" id="sec-partnerships" data-bg="#f1f5f9">
+            <div class="content-card">
+                <h2 style="color: #1e293b">Partnerships & Sponsorships</h2>
+                <p>We are grateful for the support of our partners who make this global ecosystem possible.</p>
+                
+                <div class="partners-grid">
+                    <a href="https://edgeaifoundation.org" target="_blank" class="partner-pill">Edge AI Foundation</a>
+                    <a href="https://www.ictp.it" target="_blank" class="partner-pill">ICTP</a>
+                    <a href="https://www.seeedstudio.com" target="_blank" class="partner-pill">Seeed</a>
+                </div>
+            </div>
+        </section>
+
+        <!-- FOOTER -->
+        <footer class="site-footer">
+            
+            <!-- Top Section: Newsletter & Contact -->
+            <div class="footer-top">
+                <div class="footer-form-col">
+                    <h3>Newsletter</h3>
+                    <p>ML Systems insights & updates. Join our growing community.</p>
+                    <form class="newsletter-form">
+                        <input type="email" class="newsletter-input" placeholder="Your email address">
+                        <button type="submit" class="newsletter-btn">Join</button>
+                    </form>
+                </div>
+                <div class="footer-form-col">
+                    <h3>Contact Us</h3>
+                    <form>
+                        <div style="display: flex; gap: 10px;">
+                            <input type="text" class="contact-input" placeholder="Name">
+                            <input type="email" class="contact-input" placeholder="Email">
+                        </div>
+                        <input type="text" class="contact-input" placeholder="Message">
+                        <button type="submit" class="newsletter-btn">Send Message</button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Bottom Section: Detailed Links -->
+            <div class="footer-links-grid">
+                
+                <!-- Learn -->
+                <div class="link-column">
+                    <h4>Learn</h4>
+                    <a href="#">MLSys Book</a>
+                    <a href="#">TinyTorch</a>
+                    <a href="#">Hardware Kits</a>
+                    <a href="#">Downloads</a>
+                    <a href="#" class="future-link">Educator Resources (Future)</a>
+                    <a href="#" class="future-link">Certifications (Future)</a>
+                </div>
+
+                <!-- Community -->
+                <div class="link-column">
+                    <h4>Community</h4>
+                    <a href="#">Forum/Community (Discord)</a>
+                    <a href="#">Global Workshops</a>
+                    <a href="#">Show & Tell</a>
+                    <a href="#">TinyTorch?</a>
+                    <a href="#" class="future-link">Webinars (Future)</a>
+                </div>
+
+                <!-- Support -->
+                <div class="link-column">
+                    <h4>Support</h4>
+                    <a href="#">Donations</a>
+                    <a href="#" class="future-link">Monthly Subscriptions (Future)</a>
+                </div>
+
+                <!-- Subscribe -->
+                <div class="link-column">
+                    <h4>Subscribe</h4>
+                    <a href="#">Buttondown Link</a>
+                </div>
+
+                <!-- About -->
+                <div class="link-column">
+                    <h4>About</h4>
+                    <a href="#">Mission</a>
+                    <a href="#">Team & Contributors</a>
+                    <a href="#" class="future-link">Press & Media (Future)</a>
+                    <a href="#" class="future-link">Consulting (Future)</a>
+                </div>
+
+            </div>
+        </footer>
+
+        <!-- MICROPROCESSOR SECTION - AT THE VERY BOTTOM -->
+        <section class="scroll-section" id="sec-microprocessor" data-bg="#0f172a" style="height: 300vh; position: relative; z-index: 60;">
+            <div id="microprocessor-container" style="position: fixed; top: 0; left: 0; width: 100%; height: 100vh; z-index: 1; opacity: 0; pointer-events: none; transition: opacity 0.5s ease;"></div>
+            <div class="content-card" style="position: relative; z-index: 2; max-width: 600px; padding-top: 20vh;">
+                <h2 style="color: #f8fafc">The Hardware</h2>
+                <p style="color: #94a3b8">Explore the microcontrollers and sensors powering TinyML applications around the world.</p>
+            </div>
+        </section>
+
+    </div>
+
+    <script>
+        gsap.registerPlugin(ScrollTrigger);
+
+        let scene, camera, renderer, group;
+        const boxGroups = [];
+        const labels = [];
+        // Updated Names
+        const boxNames = ["Partnerships", "Participate", "Community", "Stats", "About"];
+        
+        const categoryColors = ["#1e293b", "#1e3a8a", "#065f46", "#92400e", "#4338ca"];
+        const paleColors = ["#f1f5f9", "#eff6ff", "#ecfdf5", "#fffbeb", "#eef2ff"];
+        const modes = ['tower', 'sideways', 'fan', 'machine'];
+        
+        let currentModeIndex = 0;
+        let isTransitioning = false;
+        let autoCycle = true;
+        let cycleProgress = 0;
+        const cycleDuration = 5000;
+        
+        let chartsInitialized = false;
+        let mapInitialized = false;
+        let worldData = null;
+
+        // Microprocessor Scene Variables
+        let microScene, microCamera, microRenderer, microSystemGroup, microBoardGroup, microPcbMaterial;
+        let microAnimatedWires = [];
+        let microInitialized = false;
+
+        // Map Data & Geometry Logic
+        const locations = [
+            { name: "Bhutan" },
+            { name: "Kyrgyzstan" },
+            { name: "Colombia" },
+            { name: "Malawi" },
+            { name: "Italy" },
+            { name: "India" },
+            { name: "Saudi Arabia" },
+            { name: "Japan" },
+            { name: "Switzerland" },
+            { name: "United States of America" } 
+        ];
+
+        function init() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0xf8fafc);
+
+            camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(40, 35, 50);
+            camera.lookAt(0, 0, 0);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+            scene.add(new THREE.AmbientLight(0xffffff, 0.9));
+            const light = new THREE.DirectionalLight(0xffffff, 0.4);
+            light.position.set(30, 60, 30);
+            scene.add(light);
+
+            group = new THREE.Group();
+            scene.add(group);
+
+            const baseSizes = [10, 9, 8, 7, 6];
+
+            baseSizes.forEach((s, i) => {
+                const subContainer = new THREE.Group();
+                subContainer.userData = { id: i, baseSize: s };
+                
+                const geometry = new THREE.BoxGeometry(s, 1.2, s);
+                const material = new THREE.MeshPhongMaterial({
+                    color: paleColors[i],
+                    transparent: true,
+                    opacity: 0.95,
+                    emissive: new THREE.Color(categoryColors[i]),
+                    emissiveIntensity: 0.05
+                });
+                const mesh = new THREE.Mesh(geometry, material);
+                
+                const edges = new THREE.EdgesGeometry(geometry);
+                const line = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ 
+                    color: categoryColors[i], 
+                    transparent: true, 
+                    opacity: 0.4 
+                }));
+                mesh.add(line);
+                
+                subContainer.add(mesh);
+                subContainer.userData.mesh = mesh;
+
+                group.add(subContainer);
+                boxGroups.push(subContainer);
+
+                const labelDiv = document.createElement('div');
+                labelDiv.className = 'label';
+                labelDiv.textContent = boxNames[i];
+                labelDiv.style.color = categoryColors[i];
+                document.body.appendChild(labelDiv);
+                labels.push({ element: labelDiv });
+            });
+
+            // Pre-load map data
+            fetchMapData();
+            setupScrollTriggers();
+            updatePositions(false);
+            animate();
+            
+            // Initialize microprocessor scene
+            initMicroprocessor();
+        }
+
+        // MICROPROCESSOR SCENE FUNCTIONS
+        function initMicroprocessor() {
+            const container = document.getElementById('microprocessor-container');
+            if (!container) return;
+
+            microScene = new THREE.Scene();
+            
+            microCamera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+            microCamera.position.set(0, 15, 20);
+            microCamera.lookAt(0, 0, 0);
+
+            microRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            microRenderer.setSize(window.innerWidth, window.innerHeight);
+            microRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            microRenderer.setClearColor(0x000000, 0);
+            microRenderer.shadowMap.enabled = true;
+            microRenderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            container.appendChild(microRenderer.domElement);
+
+            // Lighting
+            microScene.add(new THREE.AmbientLight(0xffffff, 1.2));
+            microScene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 1.0));
+            
+            const dirLight = new THREE.DirectionalLight(0xffffff, 0.5);
+            dirLight.position.set(10, 20, 10);
+            dirLight.castShadow = true;
+            dirLight.shadow.mapSize.width = 2048;
+            dirLight.shadow.mapSize.height = 2048;
+            microScene.add(dirLight);
+
+            // Build the system
+            microSystemGroup = new THREE.Group();
+            microScene.add(microSystemGroup);
+            
+            microBoardGroup = new THREE.Group();
+            microSystemGroup.add(microBoardGroup);
+
+            // Materials
+            const mainBoardTextures = createActiveCircuitTextures();
+            microPcbMaterial = new THREE.MeshStandardMaterial({
+                color: 0x004422,
+                roughness: 0.9,
+                metalness: 0.1,
+                map: mainBoardTextures.map,
+                emissiveMap: mainBoardTextures.emissiveMap,
+                emissive: 0xffffff,
+                emissiveIntensity: 0
+            });
+
+            const blackPlasticMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.9 });
+            const metalSilverMat = new THREE.MeshStandardMaterial({ color: 0xcccccc, roughness: 0.6, metalness: 0.6 });
+            const metalGoldMat = new THREE.MeshStandardMaterial({ color: 0xffcc00, roughness: 0.6, metalness: 0.6 });
+            
+            const wireMats = [
+                new THREE.MeshStandardMaterial({ color: 0xff3333, roughness: 0.7 }),
+                new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.7 }),
+                new THREE.MeshStandardMaterial({ color: 0xffcc00, roughness: 0.7 }),
+                new THREE.MeshStandardMaterial({ color: 0x3366ff, roughness: 0.7 }),
+                new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.7 }),
+            ];
+
+            // Main Board
+            const boardWidth = 4, boardLength = 6.5, boardHeight = 0.1;
+            const pcb = new THREE.Mesh(new THREE.BoxGeometry(boardWidth, boardHeight, boardLength), microPcbMaterial);
+            pcb.castShadow = true;
+            pcb.receiveShadow = true;
+            microBoardGroup.add(pcb);
+
+            // Chip
+            const chip = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.15, 1.5), blackPlasticMat);
+            chip.position.y = boardHeight/2 + 0.075;
+            chip.rotation.y = Math.PI / 4;
+            chip.castShadow = true;
+            microBoardGroup.add(chip);
+
+            // USB
+            const usb = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.5, 1), metalSilverMat);
+            usb.position.set(0, 0.25, -boardLength/2 + 0.5);
+            microBoardGroup.add(usb);
+
+            // Header Pins
+            const headerGeo = new THREE.BoxGeometry(0.5, 0.4, boardLength - 1);
+            [-1, 1].forEach(side => {
+                const header = new THREE.Mesh(headerGeo, blackPlasticMat);
+                header.position.set(side * (boardWidth/2 - 0.4), 0.2, 0);
+                header.castShadow = true;
+                microBoardGroup.add(header);
+                
+                for(let i=0; i<12; i++) {
+                    const pin = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.2, 0.1), metalGoldMat);
+                    pin.position.set(side * (boardWidth/2 - 0.4), 0.5, (i-5.5)*0.4);
+                    microBoardGroup.add(pin);
+                }
+            });
+
+            // Create Sensors and Wires
+            const sensorTypes = ['motion', 'temp', 'light', 'generic', 'generic', 'generic'];
+            sensorTypes.forEach((type, i) => createMicroSensor(i, 6, type, wireMats));
+
+            microInitialized = true;
+        }
+
+        function createActiveCircuitTextures() {
+            const canvasColor = document.createElement('canvas');
+            const canvasEmissive = document.createElement('canvas');
+            canvasColor.width = canvasEmissive.width = 512;
+            canvasColor.height = canvasEmissive.height = 512;
+            
+            const ctxColor = canvasColor.getContext('2d');
+            const ctxEmissive = canvasEmissive.getContext('2d');
+
+            ctxColor.fillStyle = '#002a18';
+            ctxColor.fillRect(0, 0, 512, 512);
+            
+            ctxEmissive.fillStyle = '#000000';
+            ctxEmissive.fillRect(0, 0, 512, 512);
+
+            const setupStroke = (ctx, color) => {
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 6;
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+            };
+
+            setupStroke(ctxColor, '#005530');
+            setupStroke(ctxEmissive, '#00ffaa');
+
+            const drawTrace = (x1, y1, x2, y2, glow) => {
+                const midX = x1 + (x2 - x1) * 0.5;
+                const midY = y1 + (y2 - y1) * 0.5;
+
+                const definePath = (ctx) => {
+                    ctx.beginPath();
+                    ctx.moveTo(x1, y1);
+                    if (Math.abs(x2 - x1) > Math.abs(y2 - y1)) {
+                        ctx.lineTo(midX, y1);
+                        ctx.lineTo(midX, y2);
+                        ctx.lineTo(x2, y2);
+                    } else {
+                        ctx.lineTo(x1, midY);
+                        ctx.lineTo(x2, midY);
+                        ctx.lineTo(x2, y2);
+                    }
+                };
+
+                definePath(ctxColor);
+                ctxColor.stroke();
+                ctxColor.fillStyle = '#ccaa00';
+                ctxColor.beginPath(); ctxColor.arc(x2, y2, 5, 0, Math.PI*2); ctxColor.fill();
+
+                if (glow) {
+                    definePath(ctxEmissive);
+                    ctxEmissive.stroke();
+                    ctxEmissive.fillStyle = '#00ffaa';
+                    ctxEmissive.beginPath(); ctxEmissive.arc(x2, y2, 5, 0, Math.PI*2); ctxEmissive.fill();
+                }
+            };
+
+            const centerX = 256, centerY = 256, chipOffset = 60;
+            const banks = [
+                { dx: 0, dy: -1, count: 12, spread: 15 },
+                { dx: 0, dy: 1, count: 12, spread: 15 },
+                { dx: -1, dy: 0, count: 8, spread: 20 },
+                { dx: 1, dy: 0, count: 8, spread: 20 }
+            ];
+
+            banks.forEach((bank) => {
+                for(let i=0; i<bank.count; i++) {
+                    const offset = (i - (bank.count - 1) / 2) * bank.spread;
+                    let startX = centerX + (bank.dx * chipOffset) + (bank.dx === 0 ? offset : 0);
+                    let startY = centerY + (bank.dy * chipOffset) + (bank.dy === 0 ? offset : 0);
+                    let endX = startX + (bank.dx * 180);
+                    let endY = startY + (bank.dy * 180);
+                    if (bank.dx === 0) endX += offset * 0.5;
+                    else endY += offset * 0.5;
+
+                    const distanceToCenter = Math.abs(i - (bank.count - 1) / 2);
+                    const isCenterTrace = distanceToCenter < 1.5;
+                    
+                    drawTrace(startX, startY, endX, endY, isCenterTrace);
+                }
+            });
+            
+            return {
+                map: new THREE.CanvasTexture(canvasColor),
+                emissiveMap: new THREE.CanvasTexture(canvasEmissive)
+            };
+        }
+
+        function createMicroSensor(index, total, type, wireMats) {
+            const angle = (index / total) * Math.PI * 2;
+            const radius = 7 + Math.random() * 2;
+            const x = Math.cos(angle) * radius;
+            const z = Math.sin(angle) * radius;
+
+            const sensorGroup = new THREE.Group();
+            sensorGroup.position.set(x, (Math.random()-0.5)*2, z);
+            sensorGroup.lookAt(0, 0, 0);
+            microSystemGroup.add(sensorGroup);
+
+            // Sensor PCB
+            const canvas = document.createElement('canvas');
+            canvas.width = 512; canvas.height = 512;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#002200'; ctx.fillRect(0, 0, 512, 512);
+            ctx.strokeStyle = '#004400'; ctx.lineWidth = 4;
+            for(let i=0; i<40; i++) {
+                ctx.beginPath();
+                ctx.moveTo(Math.random() * 512, Math.random() * 512);
+                ctx.lineTo(Math.random() * 512, Math.random() * 512);
+                ctx.stroke();
+            }
+            const sPcbMat = new THREE.MeshStandardMaterial({
+                color: 0x003300, roughness: 0.8,
+                map: new THREE.CanvasTexture(canvas)
+            });
+            const sPcb = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.1, 1.5), sPcbMat);
+            sPcb.castShadow = true;
+            sensorGroup.add(sPcb);
+
+            // Sensor Component
+            let component;
+            if (type === 'motion') {
+                component = new THREE.Mesh(new THREE.SphereGeometry(0.5, 16, 16, 0, Math.PI*2, 0, Math.PI/2), 
+                    new THREE.MeshStandardMaterial({color: 0xffffff, transparent:true, opacity:0.8}));
+            } else if (type === 'temp') {
+                component = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.2, 0.5), 
+                    new THREE.MeshStandardMaterial({color: 0x3366cc}));
+            } else if (type === 'light') {
+                component = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.1, 12), 
+                    new THREE.MeshStandardMaterial({color: 0xffaa00}));
+                component.rotation.x = Math.PI/2;
+            } else {
+                component = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.3, 0.6), 
+                    new THREE.MeshStandardMaterial({color: 0x888888}));
+            }
+            component.position.y = 0.1;
+            sensorGroup.add(component);
+
+            // Wires
+            const numWires = 2 + Math.floor(Math.random() * 2);
+            const boardWidth = 4;
+            
+            for(let w=0; w<numWires; w++) {
+                const side = x > 0 ? 1 : -1;
+                const pinIdx = Math.floor(Math.random() * 12);
+                
+                const startLocal = new THREE.Vector3(
+                    side * (boardWidth/2 - 0.4), 
+                    0.5, 
+                    (pinIdx - 5.5) * 0.4
+                );
+                
+                const endLocal = new THREE.Vector3((w - (numWires-1)/2)*0.3, 0.1, 0.5).applyMatrix4(sensorGroup.matrix);
+
+                const p0 = startLocal;
+                const p3 = endLocal;
+                const p1 = p0.clone().add(new THREE.Vector3(side*2, 3 + Math.random(), 0));
+                const p2 = p3.clone().add(new THREE.Vector3(0, 2 + Math.random(), 0));
+
+                const curve = new THREE.CubicBezierCurve3(p0, p1, p2, p3);
+                const tubeGeo = new THREE.TubeGeometry(curve, 64, 0.04, 8, false);
+                tubeGeo.setDrawRange(0, 0);
+                
+                const wireMesh = new THREE.Mesh(tubeGeo, wireMats[w % wireMats.length]);
+                microSystemGroup.add(wireMesh);
+
+                microAnimatedWires.push({
+                    mesh: wireMesh,
+                    sensorIndex: index,
+                    speedOffset: Math.random() * 0.2
+                });
+            }
+        }
+
+        function updateMicroprocessor(scrollProgress) {
+            if (!microInitialized || !microSystemGroup) return;
+            
+            // Map scroll progress (0 to 1) to animation
+            const rotationProgress = scrollProgress * 8; // 8 full rotations through the section
+            
+            microSystemGroup.rotation.y = Math.sin(rotationProgress) * 0.5 + rotationProgress;
+            microSystemGroup.rotation.x = Math.sin(rotationProgress * 0.5) * 0.5;
+            microSystemGroup.rotation.z = Math.cos(rotationProgress * 0.3) * 0.2;
+
+            // Wire animation
+            const connectionSpacing = 0.15; // Progress units per sensor
+            microAnimatedWires.forEach(wireData => {
+                const { mesh, sensorIndex, speedOffset } = wireData;
+                const startThreshold = sensorIndex * connectionSpacing;
+                let progress = (scrollProgress - startThreshold) / (connectionSpacing * 0.8);
+                progress += speedOffset;
+                progress = Math.max(0, Math.min(1, progress));
+                
+                if (!mesh.userData.maxDrawRange) mesh.userData.maxDrawRange = 64 * 8 * 6;
+                mesh.geometry.setDrawRange(0, Math.floor(mesh.userData.maxDrawRange * progress));
+            });
+
+            // Circuit glow
+            const glowStart = 0.7;
+            const glowFull = 1.0;
+            let glowIntensity = Math.min(Math.max((scrollProgress - glowStart) / (glowFull - glowStart), 0), 2.0);
+            if(glowIntensity > 0.1) {
+                glowIntensity += Math.sin(Date.now() * 0.005) * 0.3;
+            }
+            microPcbMaterial.emissiveIntensity = glowIntensity;
+        }
+
+        // ... existing JS functions ...
+        function fetchMapData() {
+            // Load world topology from standard CDN
+            d3.json('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json')
+                .then(data => {
+                    worldData = data;
+                    initMapList(); // Initialize the text list even if map isn't drawn yet
+                })
+                .catch(err => console.error("Error loading map data", err));
+        }
+
+        function initMapList() {
+            const listContainer = document.getElementById('country-list');
+            listContainer.innerHTML = ''; // clear
+            
+            locations.forEach((loc, index) => {
+                const item = document.createElement('div');
+                item.className = 'country-item';
+                item.id = `list-${index}`;
+                item.textContent = loc.name;
+                listContainer.appendChild(item);
+            });
+        }
+
+        function drawMap() {
+            if (!worldData || mapInitialized) return;
+            
+            const container = document.getElementById('world-map');
+            const width = container.offsetWidth;
+            const height = container.offsetHeight;
+
+            // D3 Projection
+            const projection = d3.geoMercator()
+                .scale(width / 6.5) // Approximate scale for this container
+                .translate([width / 2, height / 1.5]);
+
+            const path = d3.geoPath().projection(projection);
+
+            const svg = d3.select("#world-map").append("svg")
+                .attr("width", width)
+                .attr("height", height)
+                .attr("viewBox", `0 0 ${width} ${height}`);
+
+            const countries = topojson.feature(worldData, worldData.objects.countries).features;
+
+            svg.selectAll("path")
+                .data(countries)
+                .enter().append("path")
+                .attr("d", path)
+                .attr("class", "country-path")
+                .attr("id", d => `country-${d.properties.name.replace(/\s+/g, '-')}`); // ID for highlighting
+
+            mapInitialized = true;
+        }
+
+        function highlightCountry(index) {
+            console.log('highlightCountry called with index:', index, 'country:', locations[index]?.name);
+            
+            // Clear active states
+            d3.selectAll('.country-path').classed('active', false);
+            document.querySelectorAll('.country-item').forEach(i => i.classList.remove('active'));
+            
+            const loc = locations[index];
+            if (!loc) {
+                console.log('No location found for index:', index);
+                return;
+            }
+
+            // Highlight D3 Map Country
+            const countryId = `#country-${loc.name.replace(/\s+/g, '-')}`;
+            d3.select(countryId).classed('active', true);
+
+            // Highlight List Item - remove scrollIntoView as it fights with ScrollTrigger pin
+            const activeList = document.getElementById(`list-${index}`);
+            if(activeList) {
+                activeList.classList.add('active');
+                // Don't scrollIntoView - let the user control scrolling
+            }
+        }
+
+        function toggleSearch() {
+            const input = document.getElementById('search-input');
+            input.classList.toggle('expanded');
+            if(input.classList.contains('expanded')) input.focus();
+        }
+
+        // New Mobile Menu Logic
+        function toggleMobileMenu() {
+            const links = document.querySelector('.nav-links');
+            const icon = document.querySelector('.mobile-menu-icon');
+            const iconPath = icon.querySelector('path');
+            
+            links.classList.toggle('mobile-open');
+            const isOpen = links.classList.contains('mobile-open');
+
+            if (isOpen) {
+                // Transform to Down Arrow
+                // Path for a chevron down
+                iconPath.setAttribute('d', 'M19 9l-7 7-7-7');
+                icon.style.transform = 'rotate(180deg)'; // Add rotation for flair
+            } else {
+                // Revert to Hamburger
+                iconPath.setAttribute('d', 'M4 6h16M4 12h16M4 18h16');
+                icon.style.transform = 'rotate(0deg)';
+            }
+        }
+
+        // Helper to scroll and close mobile menu
+        function handleNavClick(id) {
+            scrollToSection(id);
+            
+            // Close mobile menu if open
+            const links = document.querySelector('.nav-links');
+            if (links.classList.contains('mobile-open')) {
+                // Reset menu state
+                links.classList.remove('mobile-open');
+                
+                // Reset Icon
+                const icon = document.querySelector('.mobile-menu-icon');
+                const iconPath = icon.querySelector('path');
+                iconPath.setAttribute('d', 'M4 6h16M4 12h16M4 18h16');
+                icon.style.transform = 'rotate(0deg)';
+            }
+        }
+
+        function scrollToSection(id) {
+            gsap.to(window, { duration: 1.5, scrollTo: `#${id}`, ease: "power4.inOut" });
+        }
+
+        function setupScrollTriggers() {
+            // General Hero Triggers
+            ScrollTrigger.create({
+                trigger: "#hero",
+                start: "top top",
+                end: "bottom center",
+                onEnterBack: () => { 
+                    autoCycle = true; 
+                    document.body.style.backgroundColor = "#f8fafc";
+                    document.getElementById('top-nav').classList.remove('visible');
+                    document.getElementById('hero-controls').style.opacity = "1";
+                    updatePositions(true);
+                },
+                onLeave: () => { 
+                    autoCycle = false; 
+                    document.getElementById('top-nav').classList.add('visible');
+                    document.getElementById('hero-controls').style.opacity = "0";
+                }
+            });
+
+            // Specific Trigger for Map Pinning & Scrubbing
+            ScrollTrigger.create({
+                trigger: "#sec-world",
+                start: "top top",
+                end: "+=400", // Reduced from 1000 to make scrolling back up easier
+                pin: true,
+                scrub: 0.5,
+                anticipatePin: 1,
+                onUpdate: (self) => {
+                    // Only run if map is ready
+                    if(mapInitialized) {
+                        const progress = self.progress;
+                        const scrollDirection = self.direction; // 1 = down, -1 = up
+                        // Calculate index based on scroll progress
+                        const index = Math.min(
+                            Math.floor(progress * locations.length),
+                            locations.length - 1
+                        );
+                        console.log('ScrollTrigger onUpdate - progress:', progress.toFixed(3), 'direction:', scrollDirection, 'index:', index, 'country:', locations[index]?.name);
+                        highlightCountry(index);
+                    }
+                }
+            });
+
+            // Updated section IDs
+            const sectionIds = ["sec-about", "sec-community", "sec-world", "sec-participate", "sec-partnerships"];
+            const boxIndices = [4, 3, 2, 1, 0];
+
+            sectionIds.forEach((id, i) => {
+                const el = document.getElementById(id);
+                // Create trigger for background color changes and 3D Focus
+                ScrollTrigger.create({
+                    trigger: `#${id}`,
+                    start: "top center",
+                    end: "bottom center",
+                    onToggle: self => {
+                        if (self.isActive) {
+                            document.querySelectorAll('.scroll-section').forEach(s => s.classList.remove('active'));
+                            el.classList.add('active');
+                            document.body.style.backgroundColor = el.dataset.bg;
+                            
+                            document.querySelectorAll('.nav-item').forEach((item) => {
+                                const text = item.textContent.toLowerCase();
+                                const idPart = id.split('-')[1];
+                                let match = (text === idPart);
+                                if (id === 'sec-community' && text === 'stats') match = true;
+                                if (id === 'sec-world' && text === 'community') match = true;
+                                item.classList.toggle('active', match);
+                            });
+
+                            setFocusOn(boxIndices[i]);
+
+                            // Stats section logic
+                            if (id === 'sec-community') {
+                                animateStats();
+                                if (!chartsInitialized) {
+                                    initCharts();
+                                    chartsInitialized = true;
+                                }
+                            }
+
+                            // Ensure Map is drawn when entering section
+                            if (id === 'sec-world') {
+                                drawMap();
+                            }
+                        }
+                    }
+                });
+            });
+
+            // Microprocessor section ScrollTrigger
+            ScrollTrigger.create({
+                trigger: "#sec-microprocessor",
+                start: "top top",
+                end: "+=2000", // Long scroll distance for endless animation feel
+                pin: true,
+                scrub: 0.5,
+                onEnter: () => {
+                    const container = document.getElementById('microprocessor-container');
+                    if (container) container.style.opacity = '1';
+                },
+                onLeave: () => {
+                    const container = document.getElementById('microprocessor-container');
+                    if (container) container.style.opacity = '0';
+                },
+                onEnterBack: () => {
+                    const container = document.getElementById('microprocessor-container');
+                    if (container) container.style.opacity = '1';
+                },
+                onLeaveBack: () => {
+                    const container = document.getElementById('microprocessor-container');
+                    if (container) container.style.opacity = '0';
+                },
+                onUpdate: (self) => {
+                    if (microInitialized) {
+                        // Use a looping progress for endless animation
+                        const loopProgress = self.progress % 1;
+                        updateMicroprocessor(loopProgress);
+                    }
+                }
+            });
+        }
+
+        function animateStats() {
+            const numbers = document.querySelectorAll('.stat-number');
+            numbers.forEach(num => {
+                const target = parseInt(num.getAttribute('data-target'));
+                const obj = { val: 0 };
+                
+                gsap.to(obj, {
+                    val: target,
+                    duration: 2.5,
+                    ease: "power2.out",
+                    onUpdate: () => {
+                        num.textContent = Math.ceil(obj.val).toLocaleString();
+                    }
+                });
+            });
+        }
+
+        function initCharts() {
+            const ctx1 = document.getElementById('jobChart').getContext('2d');
+            new Chart(ctx1, {
+                type: 'line',
+                data: {
+                    labels: ['2020', '2021', '2022', '2023', '2024', '2025'],
+                    datasets: [{
+                        label: 'AI Engineering Jobs (k)',
+                        data: [50, 85, 140, 280, 520, 850],
+                        borderColor: '#92400e',
+                        backgroundColor: 'rgba(146, 64, 14, 0.1)',
+                        fill: true,
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: {
+                        duration: 2000,
+                        easing: 'easeOutQuart'
+                    },
+                    plugins: { legend: { display: false }, title: { display: true, text: 'Job Demand Growth' } },
+                    scales: { y: { display: false }, x: { grid: { display: false } } }
+                }
+            });
+
+            const ctx2 = document.getElementById('marketChart').getContext('2d');
+            new Chart(ctx2, {
+                type: 'bar',
+                data: {
+                    labels: ['IoT', 'Auto', 'Health', 'Retail'],
+                    datasets: [{
+                        label: 'Adoption %',
+                        data: [65, 45, 80, 30],
+                        backgroundColor: [
+                            'rgba(146, 64, 14, 0.8)',
+                            'rgba(146, 64, 14, 0.6)',
+                            'rgba(146, 64, 14, 0.4)',
+                            'rgba(146, 64, 14, 0.2)'
+                        ],
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: {
+                        duration: 2000,
+                        easing: 'easeOutQuart',
+                        delay: 300 
+                    },
+                    plugins: { legend: { display: false }, title: { display: true, text: 'Industry Adoption' } },
+                    scales: { y: { display: false }, x: { grid: { display: false } } }
+                }
+            });
+        }
+
+        function setFocusOn(activeIdx) {
+            isTransitioning = true;
+            boxGroups.forEach((sub, i) => {
+                const isActive = i === activeIdx;
+                const stackOrder = i - activeIdx;
+                let tPos, tRot;
+                
+                if (isActive) {
+                    tPos = { x: 18, y: 0, z: 12 };
+                    tRot = { x: 0.5, y: -0.5, z: 0 };
+                } else {
+                    tPos = { 
+                        x: 22 + (Math.abs(stackOrder) * 0.5), 
+                        y: stackOrder * -5, 
+                        z: 5 - (Math.abs(stackOrder) * 4) 
+                    };
+                    tRot = { x: 0.5, y: -0.5, z: 0 };
+                }
+
+                gsap.to(sub.position, { ...tPos, duration: 1.5, ease: "power3.inOut" });
+                gsap.to(sub.rotation, { ...tRot, duration: 1.5, ease: "power3.inOut", onComplete: () => {
+                    if (i === boxGroups.length - 1) isTransitioning = false;
+                }});
+                
+                gsap.to(sub.scale, { 
+                    x: isActive ? 1.5 : 0.8, 
+                    y: isActive ? 1.5 : 0.8, 
+                    z: isActive ? 1.5 : 0.8, 
+                    duration: 1.2,
+                    ease: "power2.out"
+                });
+                
+                gsap.to(sub.userData.mesh.material, {
+                    opacity: isActive ? 1.0 : 0.2,
+                    emissiveIntensity: isActive ? 0.4 : 0.05,
+                    duration: 1
+                });
+            });
+        }
+
+        function updatePositions(animateTransition) {
+            if (!autoCycle) return;
+            isTransitioning = true;
+            const mode = modes[currentModeIndex];
+            
+            boxGroups.forEach((subGroup, i) => {
+                let tPos = { x: 0, y: (i * 4.5) - 10, z: 0 };
+                let tRot = { x: 0, y: i * 0.4, z: 0 };
+
+                if (mode === 'sideways') { tPos = { x: (i - 2) * 14, y: 0, z: 0 }; tRot = { x: 1.57, y: 0, z: 0 }; }
+                if (mode === 'fan') { tPos = { x: (i - 2) * 7, y: (i - 2) * 2, z: -i * 6 }; tRot = { x: -0.5, y: 0.7, z: 0.1 }; }
+                if (mode === 'machine') { 
+                    tPos = { x: (i % 2) * 20 - 10, y: 0, z: Math.floor(i / 2) * 20 - 10 }; 
+                    if(i===4) tPos = {x:0, y:0, z:0};
+                    tRot = { x: 0, y: 0, z: 0 }; 
+                }
+
+                if (animateTransition) {
+                    gsap.to(subGroup.position, { ...tPos, duration: 1.8, ease: "expo.inOut" });
+                    gsap.to(subGroup.rotation, { ...tRot, duration: 1.8, ease: "expo.inOut" });
+                    gsap.to(subGroup.scale, { 
+                        x: 1, y: 1, z: 1, 
+                        duration: 1.5, ease: "expo.inOut",
+                        onComplete: () => { if(i === boxGroups.length-1) isTransitioning = false; }
+                    });
+                    gsap.to(subGroup.userData.mesh.material, { opacity: 0.95, emissiveIntensity: 0.05, duration: 1 });
+                } else {
+                    subGroup.position.set(tPos.x, tPos.y, tPos.z);
+                    subGroup.rotation.set(tRot.x, tRot.y, tRot.z);
+                    subGroup.scale.set(1, 1, 1);
+                    isTransitioning = false;
+                }
+            });
+        }
+
+        let lastTime = performance.now();
+        function animate() {
+            requestAnimationFrame(animate);
+            const currentTime = performance.now();
+            const deltaTime = currentTime - lastTime;
+            lastTime = currentTime;
+
+            if (autoCycle && !isTransitioning) {
+                group.rotation.y += 0.0003;
+                
+                cycleProgress += (deltaTime / cycleDuration) * 100;
+                if (cycleProgress >= 100) {
+                    cycleProgress = 0;
+                    currentModeIndex = (currentModeIndex + 1) % modes.length;
+                    updatePositions(true);
+                }
+                document.getElementById('cycle-progress').style.strokeDashoffset = 100 - cycleProgress;
+            }
+
+            boxGroups.forEach((subGroup, i) => {
+                const label = labels[i];
+                const pos = new THREE.Vector3();
+                subGroup.getWorldPosition(pos);
+                
+                const vector = pos.project(camera);
+                const x = (vector.x * 0.5 + 0.5) * window.innerWidth;
+                const y = (vector.y * -0.5 + 0.5) * window.innerHeight;
+                
+                label.element.style.left = `${x}px`;
+                label.element.style.top = `${y}px`;
+                
+                const isVisible = vector.z < 1 && Math.abs(vector.x) < 0.95 && Math.abs(vector.y) < 0.95;
+                const materialOpacity = subGroup.userData.mesh.material.opacity;
+                
+                label.element.style.opacity = (isVisible && materialOpacity > 0.4) ? 1 : 0;
+                label.element.style.transform = `translate(-50%, -50%) scale(${materialOpacity > 0.5 ? 1 : 0.8})`;
+            });
+
+            renderer.render(scene, camera);
+            
+            // Render microprocessor scene if initialized
+            if (microInitialized && microRenderer) {
+                microRenderer.render(microScene, microCamera);
+            }
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            
+            // Resize microprocessor renderer
+            if (microInitialized && microRenderer && microCamera) {
+                microCamera.aspect = window.innerWidth / window.innerHeight;
+                microCamera.updateProjectionMatrix();
+                microRenderer.setSize(window.innerWidth, window.innerHeight);
+            }
+        });
+
+        window.onload = init;
+    </script>
+</body>
+</html>
