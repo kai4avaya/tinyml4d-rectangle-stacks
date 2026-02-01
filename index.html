@@ -726,7 +726,7 @@
         </div>
 
         <div class="nav-links">
-            <div class="nav-item" style="color: #4338ca;" onclick="handleNavClick('sec-about')">About</div>
+            <div class="nav-item" style="color: #4338ca;" onclick="handleNavClick('sec-about')">One Million</div>
             <div class="nav-item" style="color: #92400e;" onclick="handleNavClick('sec-community')">Global</div>
             <div class="nav-item" style="color: #065f46;" onclick="handleNavClick('sec-world')">Community</div>
             <div class="nav-item" style="color: #1e3a8a;" onclick="handleNavClick('sec-participate')">Participate</div>
@@ -1002,7 +1002,7 @@
         const boxGroups = [];
         const labels = [];
         // Updated Names
-        const boxNames = ["Partnerships", "Participate", "Community", "Global", "About"];
+        const boxNames = ["Partnerships", "Participate", "Community", "Global", "One Million"];
         
         const categoryColors = ["#1e293b", "#1e3a8a", "#065f46", "#92400e", "#4338ca"];
         const paleColors = ["#f1f5f9", "#eff6ff", "#ecfdf5", "#fffbeb", "#eef2ff"];
@@ -1677,15 +1677,21 @@
                 onEnter: () => {
                     const container = document.getElementById('microprocessor-container');
                     if (container) container.style.opacity = '1';
+                    // Change labels for final section
+                    if (labels[0]) labels[0].element.textContent = "MAKE AND LEARN";
                 },
                 // No onLeave - keep visible when reaching the end since it's the last section
                 onEnterBack: () => {
                     const container = document.getElementById('microprocessor-container');
                     if (container) container.style.opacity = '1';
+                    // Ensure labels are set if we come back
+                    if (labels[0]) labels[0].element.textContent = "MAKE AND LEARN";
                 },
                 onLeaveBack: () => {
                     const container = document.getElementById('microprocessor-container');
                     if (container) container.style.opacity = '0';
+                    // Revert labels
+                    if (labels[0]) labels[0].element.textContent = boxNames[0];
                 },
                 onUpdate: (self) => {
                     if (microInitialized) {
