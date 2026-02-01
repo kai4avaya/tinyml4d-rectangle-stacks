@@ -709,6 +709,17 @@
             text-align: center;
         }
 
+        .cta-btn.slate {
+            color: #1e293b;
+            border-color: #1e293b;
+        }
+        .cta-btn.slate::after {
+            border-color: #1e293b;
+        }
+        .cta-btn.slate:hover {
+            background: rgba(30, 41, 59, 0.05);
+        }
+
         h2 { font-size: 64px; margin: 0 0 24px 0; font-weight: 300; letter-spacing: -0.04em; }
         p { color: #475569; line-height: 1.5; margin: 0; font-size: 22px; font-weight: 300; }
     </style>
@@ -727,7 +738,7 @@
 
         <div class="nav-links">
             <div class="nav-item" style="color: #4338ca;" onclick="handleNavClick('sec-about')">One Million</div>
-            <div class="nav-item" style="color: #92400e;" onclick="handleNavClick('sec-community')">Global</div>
+            <div class="nav-item" style="color: #92400e;" onclick="handleNavClick('sec-community')">Impact</div>
             <div class="nav-item" style="color: #065f46;" onclick="handleNavClick('sec-world')">Community</div>
             <div class="nav-item" style="color: #1e3a8a;" onclick="handleNavClick('sec-participate')">Participate</div>
             <div class="nav-item" style="color: #1e293b;" onclick="handleNavClick('sec-partnerships')">Partnerships</div>
@@ -762,7 +773,7 @@
         <section class="scroll-section" id="sec-about" data-bg="#eff6ff">
             <div class="content-card">
                 <h2 style="color: #4338ca">One million AI engineers</h2>
-                <p>Empowering a global community to build the future of AI engineering together with a mission to educate One million AI engineers by 2030</p>
+                <p>Empowering a global community to build the future of AI engineering together with a mission to educate one million AI engineers by 2030</p>
                 
                 <div class="about-images-row">
                     <img src="https://i.pinimg.com/736x/83/c6/4e/83c64e3889dc867e789bfc91253c6d1b.jpg" alt="TinyML Textbook" class="about-image">
@@ -837,7 +848,7 @@
         <section class="scroll-section" id="sec-world" data-bg="#ecfdf5">
             <div class="content-card">
                 <h2 style="color: #065f46">Global Community</h2>
-                <p>Scroll to explore our international workshops and partnerships.</p>
+                <p>International workshops and partnerships across 22 countries, hundreds of institutions and partners</p>
                 
                 <div class="global-container">
                     <!-- D3 Map Container -->
@@ -905,6 +916,10 @@
                     <a href="https://edgeaifoundation.org" target="_blank" class="partner-pill">Edge AI Foundation</a>
                     <a href="https://www.ictp.it" target="_blank" class="partner-pill">ICTP</a>
                     <a href="https://www.seeedstudio.com" target="_blank" class="partner-pill">Seeed</a>
+                </div>
+
+                <div style="margin-top: 40px;">
+                    <a href="#" class="cta-btn slate">Donate</a>
                 </div>
             </div>
         </section>
@@ -1002,7 +1017,7 @@
         const boxGroups = [];
         const labels = [];
         // Updated Names
-        const boxNames = ["Partnerships", "Participate", "Community", "Global", "One Million"];
+        const boxNames = ["Partnerships", "Participate", "Community", "Impact", "One Million"];
         
         const categoryColors = ["#1e293b", "#1e3a8a", "#065f46", "#92400e", "#4338ca"];
         const paleColors = ["#f1f5f9", "#eff6ff", "#ecfdf5", "#fffbeb", "#eef2ff"];
