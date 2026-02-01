@@ -515,11 +515,14 @@
             display: flex;
             flex-direction: column;
             overflow: hidden;
-            transition: transform 0.3s ease;
+            opacity: 0;
+            transform: translateY(30px);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
         }
 
         .pillar-card:hover {
             transform: translateY(-5px);
+            opacity: 1 !important;
         }
 
         .pillar-img {
@@ -724,7 +727,7 @@
 
         <div class="nav-links">
             <div class="nav-item" style="color: #4338ca;" onclick="handleNavClick('sec-about')">About</div>
-            <div class="nav-item" style="color: #92400e;" onclick="handleNavClick('sec-community')">Stats</div>
+            <div class="nav-item" style="color: #92400e;" onclick="handleNavClick('sec-community')">Global</div>
             <div class="nav-item" style="color: #065f46;" onclick="handleNavClick('sec-world')">Community</div>
             <div class="nav-item" style="color: #1e3a8a;" onclick="handleNavClick('sec-participate')">Participate</div>
             <div class="nav-item" style="color: #1e293b;" onclick="handleNavClick('sec-partnerships')">Partnerships</div>
@@ -982,7 +985,7 @@
         </footer>
 
         <!-- MICROPROCESSOR SECTION - AT THE VERY BOTTOM -->
-        <section class="scroll-section" id="sec-microprocessor" data-bg="#0f172a" style="height: 300vh; position: relative; z-index: 60;">
+        <section class="scroll-section" id="sec-microprocessor" data-bg="#0f172a" style="height: 100vh; position: relative; z-index: 60;">
             <div id="microprocessor-container" style="position: fixed; top: 0; left: 0; width: 100%; height: 100vh; z-index: 1; opacity: 0; pointer-events: none; transition: opacity 0.5s ease;"></div>
             <div class="content-card" style="position: relative; z-index: 2; max-width: 600px; padding-top: 20vh;">
                 <h2 style="color: #f8fafc">The Hardware</h2>
@@ -999,7 +1002,7 @@
         const boxGroups = [];
         const labels = [];
         // Updated Names
-        const boxNames = ["Partnerships", "Participate", "Community", "Stats", "About"];
+        const boxNames = ["Partnerships", "Participate", "Community", "Global", "About"];
         
         const categoryColors = ["#1e293b", "#1e3a8a", "#065f46", "#92400e", "#4338ca"];
         const paleColors = ["#f1f5f9", "#eff6ff", "#ecfdf5", "#fffbeb", "#eef2ff"];
@@ -1378,36 +1381,49 @@
             }
         }
 
-        function updateMicroprocessor(scrollProgress) {
+        function updateMicroprocessor(currentScroll) {
             if (!microInitialized || !microSystemGroup) return;
             
-            // Map scroll progress (0 to 1) to animation
-            const rotationProgress = scrollProgress * 8; // 8 full rotations through the section
+            // Note: Rotation is now handled in animate() for perpetual motion.
             
-            microSystemGroup.rotation.y = Math.sin(rotationProgress) * 0.5 + rotationProgress;
-            microSystemGroup.rotation.x = Math.sin(rotationProgress * 0.5) * 0.5;
-            microSystemGroup.rotation.z = Math.cos(rotationProgress * 0.3) * 0.2;
-
-            // Wire animation
-            const connectionSpacing = 0.15; // Progress units per sensor
+            // Wire animation - sequential connection like original
+            // Sensors connect one by one every ~800 scroll units
+            const connectionSpacing = 800;
             microAnimatedWires.forEach(wireData => {
                 const { mesh, sensorIndex, speedOffset } = wireData;
+                
+                // Calculate when this specific sensor should start connecting
                 const startThreshold = sensorIndex * connectionSpacing;
-                let progress = (scrollProgress - startThreshold) / (connectionSpacing * 0.8);
+                
+                // How far are we past the threshold?
+                // Range of 0 to 1 over the course of 'connectionSpacing' units
+                let progress = (currentScroll - startThreshold) / (connectionSpacing * 0.8);
+                
+                // Add individual wire variation
                 progress += speedOffset;
+                
+                // Clamp between 0 and 1 - ONCE WIRES CONNECT, THEY STAY CONNECTED
                 progress = Math.max(0, Math.min(1, progress));
                 
+                // Store max range if not already
                 if (!mesh.userData.maxDrawRange) mesh.userData.maxDrawRange = 64 * 8 * 6;
+                
                 mesh.geometry.setDrawRange(0, Math.floor(mesh.userData.maxDrawRange * progress));
             });
 
-            // Circuit glow
-            const glowStart = 0.7;
-            const glowFull = 1.0;
-            let glowIntensity = Math.min(Math.max((scrollProgress - glowStart) / (glowFull - glowStart), 0), 2.0);
+            // Circuit Glow Logic - match original timing
+            // Connection logic spans roughly 6 sensors * 800 spacing = 4800 units
+            // Glow starts LATE (after 3500 units) and ramps up
+            const glowStart = 3500;
+            const glowFull = 5500;
+            
+            let glowIntensity = Math.min(Math.max((currentScroll - glowStart) / (glowFull - glowStart), 0), 2.0);
+            
+            // Subtle pulse ONLY if it has started glowing
             if(glowIntensity > 0.1) {
-                glowIntensity += Math.sin(Date.now() * 0.005) * 0.3;
+                 glowIntensity += Math.sin(Date.now() * 0.005) * 0.3;
             }
+            
             microPcbMaterial.emissiveIntensity = glowIntensity;
         }
 
@@ -1483,11 +1499,19 @@
             const countryId = `#country-${loc.name.replace(/\s+/g, '-')}`;
             d3.select(countryId).classed('active', true);
 
-            // Highlight List Item - remove scrollIntoView as it fights with ScrollTrigger pin
+            // Highlight List Item
             const activeList = document.getElementById(`list-${index}`);
             if(activeList) {
                 activeList.classList.add('active');
-                // Don't scrollIntoView - let the user control scrolling
+                
+                // Auto-scroll list to show active item at the top
+                const listContainer = document.getElementById('country-list');
+                
+                // Since container is relative/positioned, offsetTop is already relative to it
+                listContainer.scrollTo({
+                    top: activeList.offsetTop, 
+                    behavior: 'smooth' 
+                });
             }
         }
 
@@ -1625,26 +1649,36 @@
                             if (id === 'sec-world') {
                                 drawMap();
                             }
+
+                            // Participate Grid Animation
+                            if (id === 'sec-participate') {
+                                gsap.to(".pillar-card", {
+                                    opacity: 1, 
+                                    y: 0, 
+                                    duration: 0.8, 
+                                    stagger: 0.2, 
+                                    ease: "power2.out", 
+                                    overwrite: true
+                                });
+                            }
                         }
                     }
                 });
             });
 
             // Microprocessor section ScrollTrigger
+            let microCumulativeScroll = 0;
             ScrollTrigger.create({
                 trigger: "#sec-microprocessor",
                 start: "top top",
-                end: "+=2000", // Long scroll distance for endless animation feel
+                end: "+=3000", // Restore pin for connection sequence
                 pin: true,
                 scrub: 0.5,
                 onEnter: () => {
                     const container = document.getElementById('microprocessor-container');
                     if (container) container.style.opacity = '1';
                 },
-                onLeave: () => {
-                    const container = document.getElementById('microprocessor-container');
-                    if (container) container.style.opacity = '0';
-                },
+                // No onLeave - keep visible when reaching the end since it's the last section
                 onEnterBack: () => {
                     const container = document.getElementById('microprocessor-container');
                     if (container) container.style.opacity = '1';
@@ -1655,9 +1689,10 @@
                 },
                 onUpdate: (self) => {
                     if (microInitialized) {
-                        // Use a looping progress for endless animation
-                        const loopProgress = self.progress % 1;
-                        updateMicroprocessor(loopProgress);
+                        // Convert scroll progress to virtual scroll units (like original: 1000px = 1 rotation)
+                        // This accumulates and never resets
+                        microCumulativeScroll = self.progress * 6000; // 6000 virtual scroll units
+                        updateMicroprocessor(microCumulativeScroll);
                     }
                 }
             });
@@ -1855,6 +1890,16 @@
             
             // Render microprocessor scene if initialized
             if (microInitialized && microRenderer) {
+                if (microSystemGroup) {
+                    const time = Date.now() * 0.0005;
+                    // Perpetual Figure-8 rotation
+                    // Y axis: main slow rotation + slight oscillation
+                    microSystemGroup.rotation.y = time * 0.5 + Math.sin(time) * 0.2; 
+                    // X axis: slight tilting
+                    microSystemGroup.rotation.x = Math.sin(time * 0.7) * 0.15;
+                    // Z axis: slight rolling
+                    microSystemGroup.rotation.z = Math.cos(time * 0.4) * 0.1;
+                }
                 microRenderer.render(microScene, microCamera);
             }
         }
